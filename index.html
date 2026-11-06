@@ -1,1 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TerraDetect - NASA Space Apps 2026</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root{--bg:#070913;--card:#0f172a;--red:#f43f5e;--green:#10b981;--blue:#0ea5e9;--yellow:#f59e0b;--text:#f8fafc;--sub:#94a3b8;--border:#1e293b}
+*{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,sans-serif}
+body{background:var(--bg);color:var(--text);padding:12px;display:flex;flex-direction:column;gap:12px}
+header{background:var(--card);padding:14px;border-radius:10px;border:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.logo{font-size:1.25rem;font-weight:800;color:var(--blue)}
+.badge{background:#0284c7;color:#fff;padding:3px 8px;border-radius:6px;font-size:.7rem;font-weight:700}
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px}
+label{font-size:.75rem;color:var(--sub);font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+select,input[type=range]{width:100%;background:#020617;border:1px solid var(--border);color:#fff;padding:10px;border-radius:8px}
+.year{font-size:1.8rem;font-weight:900;color:var(--green);text-align:center}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.box{background:#020617;border:1px solid var(--border);border-radius:8px;padding:10px}
+.val{font-size:1.15rem;font-weight:800;margin-top:3px}
+.chart{position:relative;height:220px;width:100%}
+.btn{background:linear-gradient(135deg,#0284c7,#0369a1);color:#fff;border:none;padding:12px;border-radius:8px;font-weight:700;width:100%;cursor:pointer}
+.say{background:#020617;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:.85rem;line-height:1.5;color:#38bdf8}
+.mit{background:#020617;border:1px solid var(--border);padding:10px;border-radius:8px;font-size:.8rem}
+.src{font-size:.7rem;color:var(--sub);line-height:1.4}
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);justify-content:center;align-items:center;z-index:100;padding:15px}
+.modal-content{background:var(--card);border:1px solid var(--border);padding:20px;border-radius:12px;width:100%;max-width:450px;max-height:90vh;overflow:auto;display:flex;flex-direction:column;gap:10px}
+</style>
+</head>
+<body>
 
+<header>
+  <div>
+    <div class="logo">🔍 TerraDetect</div>
+    <div class="src">Earth system trend detector, real NASA POWER data</div>
+  </div>
+  <span class="badge">NASA SPACE APPS 2026</span>
+</header>
+
+<div class="card">
+  <label>Region</label>
+  <select id="region">
+    <option value="30.04,31.24">Cairo</option>
+    <option value="30.59,31.50">Eastern Delta (Zagazig)</option>
+    <option value="30.78,31.00" selected>Central Delta (Tanta)</option>
+    <option value="31.03,30.47">Western Delta (Damanhur)</option>
+    <option value="31.20,29.92">Alexandria</option>
+    <option value="24.09,32.90">Aswan</option>
+  </select>
+  <label>Probe Year</label>
+  <div class="year" id="yearDisp">2025</div>
+  <input type="range" id="yearSlider" min="2000" max="2025" value="2025">
+</div>
+
+<div class="grid">
+  <div class="box"><label>🌡️ Temperature</label><div class="val" id="tVal" style="color:var(--red)">-</div></div>
+  <div class="box"><label>🌧️ Rainfall</label><div class="val" id="rVal" style="color:var(--blue)">-</div></div>
+  <div class="box"><label>🌱 Root-zone soil wetness</label><div class="val" id="wVal" style="color:var(--green)">-</div></div>
+  <div class="box"><label>🚨 Climate Stress Index</label><div class="val" id="csiVal">-</div></div>
+</div>
+
+<div class="card">
+  <label>📈 Trend over time</label>
+  <select id="chartVar">
+    <option value="T2M">Temperature</option>
+    <option value="PRECTOTCORR">Rainfall</option>
+    <option value="GWETROOT">Soil wetness</option>
+  </select>
+  <div class="chart"><canvas id="c"></canvas></div>
+  <div class="grid">
+    <div class="box"><label>Trend (Mann-Kendall)</label><div class="val" id="mTrend">-</div></div>
+    <div class="box"><label>p-value</label><div class="val" id="mP">-</div></div>
+    <div class="box"><label>Change per year</label><div class="val" id="mSlope">-</div></div>
+    <div class="box"><label>Total change</label><div class="val" id="mTotal">-</div></div>
+  </div>
+  <div class="src">Source: NASA POWER monthly data (annual mean), 2000-2025. Trend test: Mann-Kendall. Slope: Sen's slope.</div>
+</div>
+
+<div class="card">
+  <label>🧠 Automatic verdict (rule-based, from the data)</label>
+  <div class="say" id="say">Loading NASA data...</div>
+  <div class="mit">
+    <b style="color:var(--green)">🛡️ General guidance:</b>
+    <p id="mitText" style="color:var(--sub);margin-top:4px">-</p>
+  </div>
+  <button class="btn" onclick="openReport()">📄 Generate Policy Brief</button>
+</div>
+
+<div class="modal" id="modal">
+  <div class="modal-content">
+    <h3 style="color:var(--blue)">📋 TerraDetect Brief</h3>
+    <hr style="border-color:var(--border)">
+    <div id="modalBody" style="font-size:.85rem;line-height:1.6;color:var(--sub)"></div>
+    <button class="btn" style="background:var(--red)" onclick="closeReport()">Close</button>
+  </div>
+</div>
+
+<script>
+const START=2000, END=2025;
+const PARAMS=['T2M','PRECTOTCORR','GWETROOT'];
+const NAMES={T2M:'Temperature',PRECTOTCORR:'Rainfall',GWETROOT:'Soil wetness'};
+const UNITS={T2M:'°C',PRECTOTCORR:'mm/day',GWETROOT:''};
+const DIGITS={T2M:2,PRECTOTCORR:2,GWETROOT:3};
+
+let years=[], data={}, stats={}, chart=null;
+
+/* ---------- statistics ---------- */
+function normCdf(z){
+  const t=1/(1+0.2316419*Math.abs(z)), d=0.3989423*Math.exp(-z*z/2);
+  const p=d*t*(0.3193815+t*(-0.3565638+t*(1.781478+t*(-1.821256+t*1.330274))));
+  return z>0?1-p:p;
+}
+function median(a){const s=[...a].sort((x,y)=>x-y),m=Math.floor(s.length/2);return s.length%2?s[m]:(s[m-1]+s[m])/2;}
+function mannKendall(x){
+  const n=x.length;let S=0;
+  for(let i=0;i<n-1;i++)for(let j=i+1;j<n;j++)S+=Math.sign(x[j]-x[i]);
+  const ties={};x.forEach(v=>ties[v]=(ties[v]||0)+1);
+  let tt=0;Object.values(ties).forEach(t=>{if(t>1)tt+=t*(t-1)*(2*t+5);});
+  const v=(n*(n-1)*(2*n+5)-tt)/18;
+  const Z=S>0?(S-1)/Math.sqrt(v):S<0?(S+1)/Math.sqrt(v):0;
+  return {p:2*(1-normCdf(Math.abs(Z)))};
+}
+function sen(t,x){
+  const s=[];
+  for(let i=0;i<x.length-1;i++)for(let j=i+1;j<x.length;j++)s.push((x[j]-x[i])/(t[j]-t[i]));
+  const slope=median(s);
+  return {slope,intercept:median(x.map((v,i)=>v-slope*t[i]))};
+}
+function pctRank(arr,v){ // share of years with value <= v, 0-100
+  const ok=arr.filter(a=>a!==null);
+  return 100*ok.filter(a=>a<=v).length/ok.length;
+}
+
+/* ---------- Climate Stress Index (transparent formula) ----------
+   CSI = 0.4 x heat + 0.4 x dryness + 0.2 x low-rain
+   heat = percentile rank of the year's temperature in this region's record
+   dryness = 100 - percentile rank of soil wetness
+   low-rain = 100 - percentile rank of rainfall
+   (relative to the same region, 2000-2025)                         */
+function csi(idx){
+  let sum=0,w=0;
+  const parts=[[ 'T2M',0.4,false ],[ 'GWETROOT',0.4,true ],[ 'PRECTOTCORR',0.2,true ]];
+  for(const [p,wt,invert] of parts){
+    const v=data[p][idx];
+    if(v===null||v===undefined)continue;
+    let r=pctRank(data[p],v);
+    if(invert)r=100-r;
+    sum+=wt*r;w+=wt;
+  }
+  return w?Math.round(sum/w):null;
+}
+function level(c){return c===null?'n/a':c<35?'Low':c<65?'Moderate':'High';}
+function levelColor(c){return c===null?'#94a3b8':c<35?'#10b981':c<65?'#f59e0b':'#f43f5e';}
+
+/* ---------- data loading ---------- */
+function annual(d,y){
+  const a=d[y+'13'];
+  if(a!==undefined&&a>-900)return a;
+  const m=[];
+  for(let i=1;i<=12;i++){const v=d[y+(i<10?'0'+i:''+i)];if(v!==undefined&&v>-900)m.push(v);}
+  return m.length>=10?m.reduce((s,x)=>s+x,0)/m.length:null;
+}
+async function loadRegion(){
+  const say=document.getElementById('say');
+  say.innerText='Fetching NASA POWER data...';
+  const [lat,lon]=document.getElementById('region').value.split(',');
+  try{
+    const url=`https://power.larc.nasa.gov/api/temporal/monthly/point?parameters=${PARAMS.join(',')}&community=AG&latitude=${lat}&longitude=${lon}&start=${START}&end=${END}&format=JSON`;
+    const j=await (await fetch(url)).json();
+    const par=j.properties.parameter;
+    years=[];data={};PARAMS.forEach(p=>data[p]=[]);
+    for(let y=START;y<=END;y++){
+      years.push(y);
+      PARAMS.forEach(p=>data[p].push(par[p]?annual(par[p],y):null));
+    }
+    stats={};
+    PARAMS.forEach(p=>{
+      const t=[],x=[];
+      years.forEach((y,i)=>{if(data[p][i]!==null){t.push(y);x.push(data[p][i]);}});
+      if(x.length>=10){
+        const s=sen(t,x),m=mannKendall(x);
+        stats[p]={slope:s.slope,intercept:s.intercept,p:m.p,sig:m.p<0.05,
+                  total:s.slope*(t[t.length-1]-t[0]),n:x.length};
+      }
+    });
+    update();
+  }catch(e){
+    say.innerText='Could not fetch data. Check your internet connection and try again.';
+  }
+}
+
+/* ---------- UI update ---------- */
+function fmt(p,v){return v===null||v===undefined?'n/a':v.toFixed(DIGITS[p])+(UNITS[p]?' '+UNITS[p]:'');}
+function trendWord(s){return !s?'n/a':!s.sig?'No trend':(s.slope>0?'Increasing':'Decreasing');}
+
+function update(){
+  if(!years.length)return;
+  const yr=+document.getElementById('yearSlider').value;
+  document.getElementById('yearDisp').innerText=yr;
+  const idx=years.indexOf(yr);
+
+  document.getElementById('tVal').innerText=fmt('T2M',data.T2M[idx]);
+  document.getElementById('rVal').innerText=fmt('PRECTOTCORR',data.PRECTOTCORR[idx]);
+  document.getElementById('wVal').innerText=fmt('GWETROOT',data.GWETROOT[idx]);
+  const c=csi(idx);
+  const cv=document.getElementById('csiVal');
+  cv.innerText=c===null?'n/a':c+' / 100 ('+level(c)+')';
+  cv.style.color=levelColor(c);
+
+  /* chart + trend boxes */
+  const p=document.getElementById('chartVar').value;
+  const s=stats[p];
+  document.getElementById('mTrend').innerText=trendWord(s);
+  document.getElementById('mTrend').style.color=!s||!s.sig?'#94a3b8':(s.slope>0?'#f43f5e':'#0ea5e9');
+  document.getElementById('mP').innerText=s?s.p.toFixed(4):'n/a';
+  document.getElementById('mSlope').innerText=s?s.slope.toFixed(DIGITS[p]+2):'n/a';
+  document.getElementById('mTotal').innerText=s?s.total.toFixed(DIGITS[p])+' '+UNITS[p]:'n/a';
+
+  const trendLine=s?years.map(y=>s.intercept+s.slope*y):[];
+  const marker=years.map((y,i)=>i===idx?data[p][i]:null);
+  if(chart)chart.destroy();
+  chart=new Chart(document.getElementById('c').getContext('2d'),{
+    type:'line',
+    data:{labels:years,datasets:[
+      {label:NAMES[p],data:data[p],borderColor:'#0ea5e9',pointRadius:3,tension:0.2},
+      {label:"Sen's trend",data:trendLine,borderColor:'#f59e0b',borderDash:[6,4],pointRadius:0},
+      {label:'Probe year',data:marker,borderColor:'#f43f5e',backgroundColor:'#f43f5e',pointRadius:8,showLine:false}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}}}},
+      scales:{x:{ticks:{color:'#94a3b8',font:{size:9}}},y:{ticks:{color:'#94a3b8',font:{size:9}}}}}
+  });
+
+  /* verdict */
+  const reg=document.getElementById('region').selectedOptions[0].text;
+  let txt=`${yr} in ${reg}: temperature ${fmt('T2M',data.T2M[idx])}`;
+  if(data.T2M[idx]!==null)txt+=` (warmer than ${Math.round(pctRank(data.T2M,data.T2M[idx]))}% of years on record)`;
+  txt+=`. Climate Stress Index ${c===null?'n/a':c+' ('+level(c)+')'}.\n\n`;
+  PARAMS.forEach(q=>{
+    const t=stats[q];
+    if(!t)return;
+    txt+=t.sig
+      ?`• ${NAMES[q]}: significant ${t.slope>0?'increase':'decrease'} of ${Math.abs(t.total).toFixed(DIGITS[q])} ${UNITS[q]} over ${START}-${END} (p = ${t.p.toFixed(4)})${t.p>0.03?' [borderline]':''}.\n`
+      :`• ${NAMES[q]}: no significant trend (p = ${t.p.toFixed(4)}).\n`;
+  });
+  document.getElementById('say').innerText=txt.trim();
+
+  /* guidance (general, rule-based) */
+  let m;
+  if(c===null)m='Not enough data for guidance.';
+  else if(c>=65)m='High stress relative to this region\'s own record. Consider irrigation scheduling in cooler hours, heat-tolerant varieties, and adjusting planting dates.';
+  else if(c>=35)m='Moderate stress. Monitor soil moisture and canal water allocation, and track the trend each season.';
+  else m='Conditions are within the normal range for this region. Keep monitoring.';
+  if(stats.T2M&&stats.T2M.sig&&stats.T2M.slope>0)m+=' Temperature here is on a significant long-term rise, so plan for gradual warming.';
+  document.getElementById('mitText').innerText=m;
+}
+
+/* ---------- report ---------- */
+function openReport(){
+  if(!years.length)return;
+  const yr=+document.getElementById('yearSlider').value, idx=years.indexOf(yr);
+  const reg=document.getElementById('region').selectedOptions[0].text;
+  const c=csi(idx);
+  let h=`<p><b>Region:</b> ${reg}</p><p><b>Probe year:</b> ${yr}</p>`;
+  h+=`<p><b>Data:</b> NASA POWER (T2M, PRECTOTCORR, GWETROOT), annual means ${START}-${END}.</p>`;
+  h+=`<p><b>Temperature:</b> ${fmt('T2M',data.T2M[idx])}<br><b>Rainfall:</b> ${fmt('PRECTOTCORR',data.PRECTOTCORR[idx])}<br><b>Soil wetness:</b> ${fmt('GWETROOT',data.GWETROOT[idx])}</p>`;
+  h+=`<p><b>Climate Stress Index:</b> <span style="color:${levelColor(c)};font-weight:bold">${c===null?'n/a':c+'/100 ('+level(c)+')'}</span></p>`;
+  h+=`<p style="font-size:.75rem">CSI = 0.4 x heat + 0.4 x dryness + 0.2 x low-rain, where each part is the year's percentile rank within this region's ${START}-${END} record.</p>`;
+  h+=`<p><b>Long-term trends (Mann-Kendall, 95%):</b><br>`;
+  PARAMS.forEach(q=>{const t=stats[q];if(t)h+=`${NAMES[q]}: ${trendWord(t)} (p = ${t.p.toFixed(4)})<br>`;});
+  h+=`</p><p style="color:var(--green)"><b>Guidance:</b> ${document.getElementById('mitText').innerText}</p>`;
+  h+=`<p style="font-size:.75rem">Limits: 26 years of data; a few extreme years can drive a trend; the index is relative to each region's own history, not an absolute risk score.</p>`;
+  document.getElementById('modalBody').innerHTML=h;
+  document.getElementById('modal').style.display='flex';
+}
+function closeReport(){document.getElementById('modal').style.display='none';}
+
+/* ---------- events ---------- */
+document.getElementById('region').addEventListener('change',loadRegion);
+document.getElementById('yearSlider').addEventListener('input',update);
+document.getElementById('chartVar').addEventListener('change',update);
+loadRegion();
+</script>
+</body>
+  </html>
